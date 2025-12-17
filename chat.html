@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>StatelessChatUI</title>
+  <style>
+    :root { --bg:#0b0c10; --panel:#11131a; --ink:#e9eef2; --muted:#9fb0bf; --acc:#6aa1ff; --line:#1e2230; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial; background:var(--bg); color:var(--ink)}
+    .wrap{display:grid; grid-template-rows:auto 1fr auto; height:100%}
+    header, footer{background:var(--panel);}
+    header{display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; padding:.6rem .8rem; position:sticky; top:0; z-index:10; border-bottom:1px solid var(--line)}
+    header .title{font-weight:600; letter-spacing:.2px}
+
+    header .brand{display:flex; flex-direction:column; gap:.15rem; align-items:flex-start}
+    header .promo{font-size:12px; color:var(--acc); text-decoration:none; opacity:.9}
+    header .promo:hover{opacity:1; text-decoration:underline}
+
+    /* Info dialog */
+    dialog.info-dialog{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:0;
+      background:var(--panel);
+      color:var(--ink);
+      max-width:min(560px, calc(100vw - 24px));
+      width: 560px;
+    }
+    dialog.info-dialog::backdrop{background:rgba(0,0,0,.55)}
+    .info-card{margin:0; padding:.9rem 1rem; display:flex; flex-direction:column; gap:.75rem}
+    .info-head{display:flex; align-items:center; justify-content:space-between; gap:.75rem; border-bottom:1px solid var(--line); padding-bottom:.6rem}
+    .info-title{font-weight:600}
+    .info-body a{color:var(--acc); text-decoration:none}
+    .info-body a:hover{text-decoration:underline}
+    .info-actions{display:flex; justify-content:flex-end; gap:.5rem}
+    header .spacer{flex:1}
+    header input{background:#0c0f15; color:var(--ink); border:1px solid var(--line); padding:.45rem .5rem; border-radius:.5rem; outline:none; width:22ch; height:32px}
+    header input:focus{border-color:var(--acc)}
+    header select{
+      background:#0c0f15;
+      color:var(--ink);
+      border:1px solid var(--line);
+      padding:.45rem .5rem;
+      border-radius:.5rem;
+      outline:none;
+      width:22ch;
+      height:32px;
+      appearance:none;
+    }
+    header select:focus{border-color:var(--acc)}
+    header .small{font-size:12px; color:var(--muted)}
+    header label.small{display:flex; flex-direction:column; gap:.25rem; align-items:flex-start}
+    header .row{display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap}
+
+    /* Scroll-Viewport (smooth nur für User-Scroll, programmatisch erzwingen wir 'auto') */
+    main#scroller{overflow:auto; padding:1rem 1rem 1.5rem; scroll-behavior:smooth}
+    .log{max-width:900px; margin:1rem auto 0; display:flex; flex-direction:column; gap:1rem}
+    .msg{display:flex; gap:.75rem; align-items:flex-start}
+    .avatar{width:28px; height:28px; display:grid; place-items:center; border-radius:8px; flex:0 0 28px}
+    .user .avatar{background:#20314a}
+    .bot .avatar{background:#1b2d20}
+    .sys .avatar{background:#2a223b}
+    
+    /* Wrapper für den Nachrichteninhalt */
+    .message-content-wrapper {
+        display:flex;
+        flex-direction:column;
+        gap: 0.5rem; /* Abstand zwischen Denkprozess und Antwort */
+        width: 100%;
+    }
+
+    .bubble{background:var(--panel); border:1px solid var(--line); padding:.75rem .9rem; border-radius:12px; max-width:100%; overflow-wrap:anywhere}
+    .meta{font-size:12px; color:var(--muted); margin-bottom:.25rem}
+
+    footer{border-top:1px solid var(--line); padding:.6rem .8rem}
+    .bar{max-width:900px; margin:0 auto; display:grid; grid-template-columns:1fr auto; gap:.6rem}
+    textarea{width:100%; resize:vertical; min-height:60px; max-height:40vh; background:#0c0f15; color:var(--ink); border:1px solid var(--line); padding:.7rem .75rem; border-radius:.75rem; outline:none}
+    textarea:focus{border-color:var(--acc)}
+    button{background:#101827; color:var(--ink); border:1px solid var(--line); padding:.55rem .85rem; border-radius:.6rem; cursor:pointer}
+    button:hover{border-color:var(--acc)}
+    header button{height:32px; display:inline-flex; align-items:center}
+    .secondary{background:#0c0f15}
+    .muted{color:var(--muted)}
+    .hidden{display:none}
+    .hint{font-size:12px; color:var(--muted); margin-left:.25rem}
+    .drop{border:2px dashed #2a3346; border-radius:12px; padding:12px; text-align:center; color:var(--muted); max-width:900px; margin:1rem auto .75rem;}
+    .drop.drag{background:#0e1320; color:var(--ink)}
+    code, pre, kbd{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+
+    /* Markdown rendering */
+    .md{line-height:1.6}
+    .md h1,.md h2,.md h3{line-height:1.25; margin:.2rem 0 .6rem}
+    .md h1{font-size:1.35rem}
+    .md h2{font-size:1.2rem}
+    .md h3{font-size:1.05rem}
+    .md p{margin:.5rem 0}
+    .md ul,.md ol{margin:.5rem 0 .5rem 1.1rem}
+    .md li{margin:.2rem 0}
+    .md blockquote{margin:.6rem 0; padding:.25rem .8rem; border-left:3px solid #30445f; background:#0c111b; color:#d6e2f0; border-radius:6px}
+    .md hr{border:none; border-top:1px solid var(--line); margin:.8rem 0}
+    .md code{background:#0c0f15; padding:.12rem .32rem; border:1px solid var(--line); border-radius:.35rem}
+    .md pre{background:#0c0f15; border:1px solid var(--line); border-radius:10px; padding:.8rem; overflow:auto; position:relative}
+    .md pre>code{display:block; white-space:pre}
+    .md table{border-collapse:collapse; margin:.8rem 0; width:100%; border:1px solid var(--line)}
+    .md th,.md td{padding:.5rem .7rem; border:1px solid var(--line); text-align:left}
+    .md th{background:#0f1725; font-weight:600}
+    .codewrap{position:relative}
+    .copybtn{position:absolute; top:.45rem; right:.45rem; font-size:12px; padding:.25rem .45rem; border-radius:.4rem; background:#0f1725; border:1px solid var(--line); cursor:pointer}
+    .copybtn:hover{border-color:var(--acc)}
+    .task-done{opacity:.9}
+
+    /* System prompt styling */
+    .sysinput{width:100%; resize:vertical; min-height:60px; max-height:30vh; background:#0c0f15; color:var(--ink); border:1px solid var(--line); padding:.7rem .75rem; border-radius:.75rem; outline:none}
+    .sysinput:focus{border-color:var(--acc)}
+
+    /* JSON Editor */
+    details.raw{max-width:900px; margin:1rem auto 0; border:1px solid var(--line); border-radius:10px; background:#0c0f15}
+    details.raw>summary{cursor:pointer; padding:.6rem .8rem; list-style:none; user-select:none}
+    details.raw>summary::marker{display:none}
+    details.raw[open]>summary{border-bottom:1px solid var(--line)}
+    .raw .inner{padding:.8rem}
+    .raw textarea{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-height:220px; white-space:pre; tab-size:2}
+    .raw .row{display:flex; gap:.5rem; align-items:center; margin-top:.5rem; flex-wrap:wrap}
+    .badge{font-size:12px; color:var(--muted)}
+
+    /* Scroll-to-bottom button */
+    .to-bottom{position:fixed; right:16px; bottom:16px; padding:.5rem .7rem; border-radius:.6rem; background:#101827; border:1px solid var(--line); color:var(--ink); display:none; opacity:.92}
+    .to-bottom.show{display:block}
+    
+    /* STYLES FÜR THINKING-BOX */
+    .think-bubble {
+        width: 100%;
+    }
+    .think-bubble details {
+        background: #1a1625;
+        border: 1px solid #3c324f;
+        border-radius: 10px;
+        font-size: 13px;
+    }
+    .think-bubble summary {
+        cursor: pointer;
+        padding: .5rem .8rem;
+        font-weight: 500;
+        color: var(--muted);
+        user-select: none;
+    }
+    .think-bubble summary:hover {
+        color: var(--ink);
+    }
+    .think-bubble .think-content {
+        padding: .1rem .8rem .7rem;
+        border-top: 1px solid #3c324f;
+        color: #c0b8d1;
+    }
+	/* — Polishing: Sampling-Inputs im Einstellungs-Panel — */
+#settingsPanel .small {               /* Label + Feld vertikal, kompakt */
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  align-items: flex-start;
+}
+
+/* Einheitliche, schmale Number-Inputs */
+#settingsPanel .small input[type="number"] {
+  width: 10ch;                        /* fixe Breite -> gleiche Kante */
+  height: 32px;
+  padding: .35rem .5rem;
+  background: #0c0f15;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums; /* saubere, ausgerichtete Ziffern */
+  outline: none;
+}
+
+/* Fokus-Feedback passend zu den restlichen Controls */
+#settingsPanel .small input[type="number"]:focus {
+  border-color: var(--acc);
+  box-shadow: 0 0 0 2px rgba(106,161,255,.15);
+}
+
+/* Dezente Placeholder-Farbe */
+#settingsPanel .small input[type="number"]::placeholder {
+  color: var(--muted);
+  opacity: .9;
+}
+
+/* Spinner bei Number-Inputs ausblenden (nur im Settings-Panel) */
+#settingsPanel .small input[type="number"]::-webkit-outer-spin-button,
+#settingsPanel .small input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#settingsPanel .small input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Kleines Tuning für die Gruppe: dichter zusammen, bricht sauber um */
+#settingsPanel > .bar > div:last-child,
+#settingsPanel .bar > div:last-child {
+  gap: .5rem .75rem;                  /* Zeilen/Spalten-Gap */
+  flex-wrap: wrap;
+}
+
+  
+    /* ---------- Responsive ---------- */
+    @media (max-width: 980px){
+      header{gap:.6rem}
+      header .spacer{display:none}
+      header label.small{min-width:200px}
+      header .row{width:100%}
+      header #tokenRate{width:auto; text-align:left !important}
+    }
+    @media (max-width: 720px){
+      header label.small{flex:1 1 220px}
+      header input, header select{width:100%}
+      main#scroller{padding:.85rem .75rem 1.25rem}
+      .bar{grid-template-columns:1fr}
+      footer .row{flex-wrap:wrap}
+      textarea{min-height:90px}
+      /* Settings panel stack */
+      #settingsPanel{grid-template-columns:1fr !important}
+      #settingsPanel > div{grid-template-columns:1fr !important}
+      #settingsPanel > div > div:last-child{min-width:0 !important; align-self:start !important}
+    }
+    @media (max-width: 480px){
+      header label.small{flex:1 1 100%}
+      header .row{gap:.4rem}
+      header button, footer button{padding:.5rem .75rem}
+    }
+
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+    <div class="title">💬 StatelessChatUI</div>
+    <a class="promo" href="https://www.promptinjection.net/" target="_blank" rel="noopener">PromptInjection.net</a>
+  </div>
+    <div class="spacer"></div>
+    <label class="small"><span>API Base</span>
+      <input id="apiBase" value="http://127.0.0.1:8080/v1" />
+    </label>
+    <label class="small"><span>Model</span>
+      <select id="model">
+        <option value="" selected disabled>— Load models —</option>
+      </select>
+    </label>
+    <label class="small"><span>API Key</span>
+      <input id="apiKey" type="password" autocomplete="new-password" value="" placeholder="optional" />
+    </label>
+    <div class="row">
+      <button id="importBtn" title="Import chat">Import</button>
+      <input id="importFile" type="file" accept="application/json,.json,.jsonl" class="hidden" />
+      <button id="exportBtn" title="Export chat">Export</button>
+      <button id="loadModelsBtn" class="secondary" title="GET /v1/models">Load models</button>
+      <button id="infoBtn" class="secondary" title="Info">Info</button>
+      <span id="modelStatus" class="small"></span>
+    </div>
+    <div class="row">
+        <div id="tokenRate" class="small" style="width:12ch; text-align:right;"></div>
+    </div>
+  </header>
+
+  <main id="scroller">
+    <div id="drop" class="drop">Drop a file here to import a chat (JSON in the usual <code>[{role, content}]</code> format).<br><span class="hint">Or click <b>Import</b> above.</span></div>
+
+    <details id="rawBox" class="raw">
+      <summary>✎ Edit chat as JSON <span class="badge">(toggle)</span></summary>
+      <div class="inner">
+        <textarea id="jsonEditor" spellcheck="false" placeholder='[ { "role": "system", "content": "..." }, ... ]'></textarea>
+        <div class="row">
+          <button id="jsonApply">Apply (Replace)</button>
+          <button id="jsonAppend" class="secondary">Append</button>
+          <button id="jsonRefresh" class="secondary">Refresh from chat</button>
+          <button id="jsonPretty" class="secondary">Beautify</button>
+          <button id="jsonMinify" class="secondary">Minify</button>
+          <button id="jsonValidate" class="secondary">Validate</button>
+          <span id="jsonStatus" class="badge"></span>
+        </div>
+        <div class="hint" style="margin-top:.25rem">
+          Accepts: <code>[{role,content}]</code> or <code>{ system, messages:[...] }</code> or JSONL (one message per line).
+        </div>
+      </div>
+    </details>
+
+    <div id="log" class="log"></div>
+  </main>
+
+  <footer>
+    <div class="bar">
+      <textarea id="input" placeholder="Type a message… (Send: Ctrl/⌘+Enter)"></textarea>
+      <div class="row" style="display:flex; gap:.6rem; align-items:center">
+        <button id="send">Send</button>
+        <button id="stop" class="secondary" disabled>Stop</button>
+        <button id="clear" class="secondary">Clear chat</button>
+        <button id="settingsToggle" class="secondary" title="Toggle settings">⚙️</button>
+      </div>
+    </div>
+    <div id="settingsPanel" class="bar hidden" style="margin-top:.6rem; grid-template-columns:1fr auto; gap:.6rem">
+      <div style="max-width:900px; margin:0 auto; display:grid; grid-template-columns:1fr auto; gap:.6rem; grid-column:1/-1; width:100%">
+        <div>
+          <label class="small" style="display:block; margin-bottom:.35rem">System prompt</label>
+          <textarea id="system" class="sysinput" rows="2" placeholder="Optional — e.g. You are a helpful assistant."></textarea>
+        </div>
+        <div style="min-width:260px; align-self:end; display:flex; align-items:center; gap:.6rem; flex-wrap:wrap">
+          <label class="small">Temperature <span id="tempVal" class="hint">0.7</span></label>
+          <input id="temp" type="range" min="0" max="2" step="0.1" value="0.7" style="width:160px">
+          <label class="small">top_p<br>
+            <input id="top_p" type="number" inputmode="decimal" step="0.01" min="0" max="1" placeholder="(default)" style="width:9ch; text-align:right">
+          </label>
+          <label class="small">min_p<br>
+            <input id="min_p" type="number" inputmode="decimal" step="0.01" min="0" max="1" placeholder="(default)" style="width:9ch; text-align:right">
+          </label>
+          <label class="small">top_k<br>
+            <input id="top_k" type="number" step="1" min="0" placeholder="(default)" style="width:9ch; text-align:right">
+          </label>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<button id="toBottom" class="to-bottom" title="Jump to bottom">▼ Bottom</button>
+
+<dialog id="infoDialog" class="info-dialog">
+  <form method="dialog" class="info-card">
+    <div class="info-head">
+      <div class="info-title">💬 StatelessChatUI</div>
+      <button class="secondary" value="close" aria-label="Close">✕</button>
+    </div>
+    <div class="info-body">
+      <div><span class="muted">Version:</span> <code id="infoVersion">0.0.0</code></div>
+      <div><span class="muted">Project URL:</span> <a id="infoProjectUrl" href="https://example.com/statelesschatui" target="_blank" rel="noopener">https://example.com/statelesschatui</a></div>
+      <div><span class="muted">AI Blog:</span> <a href="https://www.promptinjection.net/" target="_blank" rel="noopener">PromptInjection.net</a></div>
+      <div class="muted" style="margin-top:.6rem; font-size:12px">Stateless UI — no server-side chat storage.</div>
+    </div>
+    <div class="info-actions">
+      <button value="close">Close</button>
+    </div>
+  </form>
+</dialog>
+
+
+<script>
+(() => {
+  const els = {
+    scroller: document.getElementById('scroller'),
+    log: document.getElementById('log'),
+    drop: document.getElementById('drop'),
+    input: document.getElementById('input'),
+    sendBtn: document.getElementById('send'),
+    stopBtn: document.getElementById('stop'),
+    clearBtn: document.getElementById('clear'),
+    apiBase: document.getElementById('apiBase'),
+    model: document.getElementById('model'),
+    apiKey: document.getElementById('apiKey'),
+    system: document.getElementById('system'),
+    temp: document.getElementById('temp'),
+    tempVal: document.getElementById('tempVal'),
+    importBtn: document.getElementById('importBtn'),
+    importFile: document.getElementById('importFile'),
+    exportBtn: document.getElementById('exportBtn'),
+    loadModelsBtn: document.getElementById('loadModelsBtn'),
+    modelStatus: document.getElementById('modelStatus'),
+    rawBox: document.getElementById('rawBox'),
+    jsonEditor: document.getElementById('jsonEditor'),
+    jsonApply: document.getElementById('jsonApply'),
+    jsonAppend: document.getElementById('jsonAppend'),
+    jsonRefresh: document.getElementById('jsonRefresh'),
+    jsonPretty: document.getElementById('jsonPretty'),
+    jsonMinify: document.getElementById('jsonMinify'),
+    jsonValidate: document.getElementById('jsonValidate'),
+    jsonStatus: document.getElementById('jsonStatus'),
+    toBottom: document.getElementById('toBottom'),
+    settingsToggle: document.getElementById('settingsToggle'),
+    settingsPanel: document.getElementById('settingsPanel'),
+    tokenRate: document.getElementById('tokenRate'),
+    infoBtn: document.getElementById('infoBtn'),
+    infoDialog: document.getElementById('infoDialog'),
+    infoVersion: document.getElementById('infoVersion'),
+    infoProjectUrl: document.getElementById('infoProjectUrl'),
+    // NEU:
+    top_p: document.getElementById('top_p'),
+    min_p: document.getElementById('min_p'),
+    top_k: document.getElementById('top_k'),
+  };
+
+  let messages = [];
+  let abortController = null;
+  const NL = '\n';
+
+  const APP_VERSION = '2025-12-13';
+  const PROJECT_URL = 'https://example.com/statelesschatui';
+  
+  let streamStartTime = 0;
+  let lastUpdateTime = 0;
+  let finalCompletionTokens = 0;
+  const UPDATE_INTERVAL = 200; // ms
+
+  /* ---------- Auto-Scroll (geflickt) ---------- */
+  let autoscroll = true;
+  let isRendering = false;
+  const BOTTOM_EPS = 80;
+
+  function atBottom(){
+    const s = els.scroller;
+    return (s.scrollHeight - s.scrollTop - s.clientHeight) <= BOTTOM_EPS;
+  }
+  function forceScrollToBottom(){
+    const s = els.scroller;
+    const prev = s.style.scrollBehavior;
+    s.style.scrollBehavior = 'auto';
+    s.scrollTop = s.scrollHeight;
+    s.style.scrollBehavior = prev || '';
+  }
+  function maybeScroll(force=false){
+    if (force || autoscroll || atBottom()) forceScrollToBottom();
+    const show = !atBottom();
+    els.toBottom.classList.toggle('show', show);
+    if (!show) autoscroll = true;
+  }
+  els.scroller.addEventListener('scroll', () => {
+    if (isRendering) return;
+    autoscroll = atBottom();
+    els.toBottom.classList.toggle('show', !autoscroll);
+  });
+  els.toBottom.addEventListener('click', () => { autoscroll = true; maybeScroll(true); });
+
+  /* ---------- Markdown ---------- */
+  const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  function inlineMd(s){
+    s = s.replace(/`([^`]+)`/g, (_,p)=>'<code>'+p+'</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, (_,p)=>'<strong>'+p+'</strong>');
+    s = s.replace(/\*([^*]+)\*/g,   (_,p)=>'<em>'+p+'</em>');
+    s = s.replace(/\[([^\]]+)\]\((https?:[^\)\s]+)[^\)]*\)/g, (_,txt,url)=>'<a href="'+url+'" target="_blank" rel="noopener">'+txt+'</a>');
+    s = s.replace(/\bhttps?:\/\/[^\s)]+/g, u => '<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>');
+    return s;
+  }
+  function mdToHtml(md){
+    md = (md||'').replace(/\r/g,'');
+    const lines = md.split('\n');
+    let html = '', inCode = false, codeLang = '', listType = null;
+    const closeList = () => { if (listType) { html += `</${listType}>`; listType=null; } };
+    for (let i=0;i<lines.length;i++){
+      let line = lines[i];
+      if (!inCode && /^\s*```/.test(line)){
+        closeList();
+        const m = line.match(/^\s*```\s*([\w+-]*)/);
+        codeLang = m && m[1] ? m[1] : '';
+        html += `<div class="codewrap"><pre><code data-lang="${esc(codeLang)}">`;
+        inCode = true; continue;
+      }
+      if (inCode){
+        if (/^\s*```\s*$/.test(line)){ html += `</code></pre><button class="copybtn">Copy</button></div>`; inCode=false; continue; }
+        html += esc(line) + '\n'; continue;
+      }
+      const h = line.match(/^\s*(#{1,6})\s+(.*)$/);
+      if (h){ closeList(); const lvl=h[1].length; html += `<h${lvl}>${inlineMd(esc(h[2]))}</h${lvl}>`; continue; }
+      if (/^\s*(?:---|\*\*\*|___)\s*$/.test(line)){ closeList(); html += '<hr/>'; continue; }
+      if (/^\s*>\s?/.test(line)){
+        closeList();
+        const quoteLines = [];
+        while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+          quoteLines.push(lines[i].replace(/^\s*>\s?/, ''));
+          i++;
+        }
+        i--;
+        const quoteText = inlineMd(esc(quoteLines.join('\n')));
+        html += `<blockquote><p>${quoteText.replace(/\n/g, '<br />')}</p></blockquote>`;
+        continue;
+      }
+      
+      // --- START: Table Parsing ---
+      const isTableLine = (l) => l.includes('|');
+      const isSeparatorLine = (l) => /^\s*\|?([-:]+\|)+[-:]+\|?\s*$/.test(l.trim());
+      
+      if (isTableLine(line) && i + 1 < lines.length && isSeparatorLine(lines[i + 1])) {
+        closeList();
+        html += '<table>';
+        
+        // Header
+        const headers = line.split('|').map(h => h.trim()).slice(1, -1);
+        html += '<thead><tr>';
+        headers.forEach(h => { html += `<th>${inlineMd(esc(h))}</th>`; });
+        html += '</tr></thead>';
+        
+        i += 2; // Skip header und separator line
+        
+        // Body
+        html += '<tbody>';
+        while (i < lines.length && isTableLine(lines[i])) {
+            const cells = lines[i].split('|').map(c => c.trim()).slice(1, -1);
+            if (cells.length > 0) {
+                html += '<tr>';
+                for (let j = 0; j < headers.length; j++) {
+                    const cellContent = cells[j] || '';
+                    html += `<td>${inlineMd(esc(cellContent))}</td>`;
+                }
+                html += '</tr>';
+            }
+            i++;
+        }
+        i--;
+        
+        html += '</tbody></table>';
+        continue;
+      }
+      // --- END: Table Parsing ---
+
+      let m;
+      if (m = line.match(/^\s*[-*+]\s+\[( |x|X)\]\s+(.*)$/)){
+        const checked = /x/i.test(m[1]);
+        if (listType!=='ul'){ closeList(); listType='ul'; html += '<ul>'; }
+        html += `<li class="${checked?'task-done':''}">`+(checked?'✅ ':'⬜ ')+inlineMd(esc(m[2]))+'</li>'; continue;
+      }
+      if (/^\s*[-*+]\s+/.test(line)){
+        if (listType!=='ul'){ closeList(); listType='ul'; html += '<ul>'; }
+        html += `<li>${inlineMd(esc(line.replace(/^\s*[-*+]\s+/,'')))}</li>`; continue;
+      }
+      if (m = line.match(/^\s*(\d+)\.\s+(.*)$/)){
+        if (listType!=='ol'){ closeList(); listType='ol'; html += '<ol>'; }
+        html += `<li>${inlineMd(esc(m[2]))}</li>`; continue;
+      }
+      if (/^\s*$/.test(line.trim())){ closeList(); }
+      else { closeList(); html += `<p>${inlineMd(esc(line))}</p>`; }
+    }
+    closeList(); return html;
+  }
+  function enhanceCodeCopy(container){
+    container.querySelectorAll('.codewrap .copybtn:not([data-init])').forEach(btn=>{
+      btn.dataset.init = '1';
+      btn.addEventListener('click', ()=>{
+        const code = btn.parentElement.querySelector('code');
+        const text = code ? code.textContent : '';
+        navigator.clipboard.writeText(text).then(()=>{ btn.textContent='Copied'; setTimeout(()=>btn.textContent='Copy',1000); });
+      });
+    });
+  }
+
+  /* ---------- UI helpers ---------- */
+  function renderBubbleContent(el, role, content){
+    el.classList.add('md'); el.innerHTML = mdToHtml(content || ''); enhanceCodeCopy(el);
+  }
+  
+  function addMessage(role, content) {
+    const cls = role === 'user' ? 'user' : role === 'system' ? 'sys' : 'bot';
+    const avatar = role === 'user' ? '🧑' : role === 'system' ? '⚙️' : '🤖';
+    const msgEl = document.createElement('div');
+    msgEl.className = `msg ${cls}`;
+    msgEl.innerHTML = `
+      <div class="avatar">${avatar}</div>
+      <div class="message-content-wrapper">
+        <div class="bubble">
+          <div class="meta">${role}</div>
+          <div class="content md"></div>
+        </div>
+      </div>`;
+    els.log.appendChild(msgEl);
+    const contentEl = msgEl.querySelector('.content');
+    renderBubbleContent(contentEl, role, content);
+    if (!isRendering) maybeScroll();
+    return contentEl;
+  }
+  
+  function addThinkBubble(assistantContentEl) {
+    const wrapper = assistantContentEl.closest('.message-content-wrapper');
+    const bubble = wrapper.querySelector('.bubble');
+    if (!wrapper || !bubble) return null;
+
+    const thinkEl = document.createElement('div');
+    thinkEl.className = 'think-bubble';
+    thinkEl.innerHTML = `
+      <details>
+        <summary>🤔 Show thinking</summary>
+        <div class="think-content md"></div>
+      </details>
+    `;
+    wrapper.insertBefore(thinkEl, bubble);
+    return thinkEl.querySelector('.think-content');
+  }
+
+  function setStreamingState(active) { els.sendBtn.disabled = active; els.stopBtn.disabled = !active; els.input.disabled = active; }
+
+  function renderAll(){
+    isRendering = true;
+    els.log.innerHTML = '';
+    for (const m of messages) addMessage(m.role, m.content);
+    forceScrollToBottom();
+    isRendering = false;
+    autoscroll = true;
+    els.toBottom.classList.remove('show');
+  }
+
+  /* ---------- Normalizer ---------- */
+  function normalizeContent(c){ if (typeof c === 'string') return c; if (Array.isArray(c)) return c.map(p => typeof p==='string'? p : (p?.text ?? '')).join(''); if (c && typeof c==='object' && 'text' in c) return String(c.text ?? ''); try { return JSON.stringify(c); } catch { return String(c); } }
+  function normalizeRole(r){ const s=String(r||'').toLowerCase(); if (s.startsWith('assist')) return 'assistant'; if (s.startsWith('sys')) return 'system'; return 'user'; }
+
+  /* ---------- Export inkl. system ---------- */
+  function buildExportArray(){
+    const out = messages.map(m => ({ role: m.role, content: m.content }));
+    const sysText = (els.system.value || '').trim();
+    const firstIsSystem = out[0]?.role === 'system';
+    if (sysText) {
+      if (!firstIsSystem) out.unshift({ role: 'system', content: sysText });
+      else if (out[0].content !== sysText) out[0] = { role: 'system', content: sysText };
+    }
+    return out;
+  }
+    
+  function updateTokenRate(buffer, forceFinal = false) {
+    const now = performance.now();
+    if (!forceFinal && now - lastUpdateTime < UPDATE_INTERVAL) return;
+    lastUpdateTime = now;
+
+    const elapsedSeconds = (now - streamStartTime) / 1000;
+    if (elapsedSeconds < 0.1) return;
+
+    let tokens, rate, label;
+    if (finalCompletionTokens > 0) {
+        tokens = finalCompletionTokens;
+        rate = tokens / elapsedSeconds;
+        label = `Ø ${rate.toFixed(1)} t/s`;
+    } else {
+        // Schätzung: ca. 4 Zeichen pro Token
+        tokens = Math.round(buffer.length / 4);
+        rate = tokens / elapsedSeconds;
+        label = `~${rate.toFixed(1)} t/s`;
+    }
+    els.tokenRate.textContent = label;
+  }
+
+  /* ---------- Models (GET /v1/models) ---------- */
+  async function loadModels() {
+    const base = (els.apiBase.value || '').trim().replace(/\/$/, '');
+    const url = `${base}/models`;
+
+    const headers = { 'Accept': 'application/json' };
+    const key = (els.apiKey.value || '').trim();
+    if (key) headers['Authorization'] = `Bearer ${key}`;
+
+    if (els.modelStatus) els.modelStatus.textContent = 'Loading…';
+    if (els.loadModelsBtn) els.loadModelsBtn.disabled = true;
+
+    try {
+      const res = await fetch(url, { method: 'GET', headers, mode: 'cors' });
+      if (!res.ok) {
+        const t = await res.text().catch(()=> '');
+        throw new Error(`HTTP ${res.status}: ${t || 'Failed to load models'}`);
+      }
+      const data = await res.json();
+
+      // OpenAI-Style: { data: [{id: "..."}, ...] }
+      // Fallbacks für andere Server:
+      const list =
+        Array.isArray(data?.data) ? data.data :
+        Array.isArray(data?.models) ? data.models :
+        Array.isArray(data) ? data :
+        [];
+
+      const ids = list
+        .map(m => (typeof m === 'string' ? m : m?.id))
+        .filter(Boolean)
+        .map(String);
+
+      if (!ids.length) throw new Error('No models found in /v1/models.');
+
+      ids.sort((a,b)=>a.localeCompare(b));
+
+      const prev = els.model.value;
+      els.model.innerHTML = '';
+      for (const id of ids) {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = id;
+        els.model.appendChild(opt);
+      }
+
+      // Auswahl: vorherige behalten wenn möglich, sonst erstes
+      els.model.value = ids.includes(prev) ? prev : ids[0];
+
+      if (els.modelStatus) els.modelStatus.textContent = `${ids.length} models`;
+    } catch (e) {
+      if (els.modelStatus) els.modelStatus.textContent = 'Error';
+      addMessage('system', `[Model load] ${e.message}`);
+    } finally {
+      if (els.loadModelsBtn) els.loadModelsBtn.disabled = false;
+    }
+  }
+
+  /* ---------- Send (Unterstützt <think> und "reasoning", mit Performance-Fix) ---------- */
+  async function sendMessage() {
+    try {
+      const text = els.input.value.trim();
+      if (!text && !els.system.value.trim()) return;
+
+      if (!els.model.value) {
+        addMessage('system', '[Hint] No model selected — click “Load models”, then choose one.');
+        return;
+      }
+      
+      els.tokenRate.textContent = '';
+      finalCompletionTokens = 0;
+      streamStartTime = 0;
+
+      if (messages.length === 0 && els.system.value.trim()) {
+        const sys = els.system.value.trim();
+        messages.push({ role: 'system', content: sys });
+        addMessage('system', sys);
+      }
+      if (text) {
+        messages.push({ role: 'user', content: text });
+        addMessage('user', text);
+        els.input.value = '';
+      }
+
+      const outEl = addMessage('assistant', '');
+
+      // NEU: optionale Sampling-Parameter nur mitsenden, wenn gesetzt
+      function parseOptionalFloat(el, min, max) {
+        const v = (el?.value ?? '').trim();
+        if (v === '') return null;
+        const num = parseFloat(v);
+        if (Number.isNaN(num)) return null;
+        if (typeof min === 'number' && num < min) return null;
+        if (typeof max === 'number' && num > max) return null;
+        return num;
+      }
+      function parseOptionalInt(el, min) {
+        const v = (el?.value ?? '').trim();
+        if (v === '') return null;
+        const num = parseInt(v, 10);
+        if (Number.isNaN(num)) return null;
+        if (typeof min === 'number' && num < min) return null;
+        return num;
+      }
+      const extras = {};
+      const _top_p = parseOptionalFloat(els.top_p, 0, 1);
+      const _min_p = parseOptionalFloat(els.min_p, 0, 1);
+      const _top_k = parseOptionalInt(els.top_k, 0);
+      if (_top_p !== null) extras.top_p = _top_p;
+      if (_min_p !== null) extras.min_p = _min_p;
+      if (_top_k !== null) extras.top_k = _top_k;
+
+      const body = { model: els.model.value.trim(), messages, stream: true, temperature: parseFloat(els.temp.value), ...extras };
+      const headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
+      const key = els.apiKey.value.trim(); if (key) headers['Authorization'] = `Bearer ${key}`;
+      const url = `${els.apiBase.value.trim().replace(/\/$/, '')}/chat/completions`;
+
+      abortController = new AbortController();
+      setStreamingState(true);
+
+      let assistantBuffer = '';
+      let thinkBuffer = '';
+      let inThinkBlock = false;
+      let thinkEl = null;
+
+      // --- START ÄNDERUNG: CORS hinzugefügt ---
+      const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: abortController.signal, mode: 'cors' });
+      // --- ENDE ÄNDERUNG ---
+      
+      if (!res.ok) { const t = await res.text().catch(()=> ''); throw new Error(`HTTP ${res.status}: ${t || 'Server error'}`); }
+      
+      const ctype = (res.headers.get('content-type') || '').toLowerCase();
+      if (!ctype.includes('text/event-stream')) {
+        const requestStartTime = performance.now();
+        const raw = await res.text(); 
+        if (!raw) throw new Error('Empty response (status OK, but no content).');
+        
+        streamStartTime = requestStartTime;
+        let data; try{ data = JSON.parse(raw);}catch{ throw new Error(`Unerwartetes Format: ${raw.slice(0,200)}...`); }
+        
+        let fullContent = data?.choices?.[0]?.message?.content ?? '';
+        const reasoningContent = data?.choices?.[0]?.message?.reasoning_content;
+
+        if (reasoningContent) {
+            thinkEl = addThinkBubble(outEl);
+            renderBubbleContent(thinkEl, 'system', reasoningContent);
+            thinkBuffer = reasoningContent;
+            assistantBuffer = fullContent.trim();
+        } else {
+            // Fallback auf <think>-Tag-Verarbeitung
+            const thinkMatch = fullContent.match(/<think>([\s\S]*?)<\/think>/);
+            if (thinkMatch) {
+                const thinkText = thinkMatch[1].trim();
+                thinkEl = addThinkBubble(outEl);
+                renderBubbleContent(thinkEl, 'system', thinkText);
+                thinkBuffer = thinkText;
+                assistantBuffer = fullContent.replace(thinkMatch[0], '').trim();
+            } else {
+                assistantBuffer = fullContent;
+            }
+        }
+        
+        renderBubbleContent(outEl, 'assistant', assistantBuffer);
+        
+        finalCompletionTokens = data?.usage?.completion_tokens || 0;
+        updateTokenRate(assistantBuffer + thinkBuffer, true);
+        
+        maybeScroll();
+      } else {
+        // --- OPTIMIERUNG START ---
+        let renderScheduled = false;
+        let assistantNeedsRender = false;
+        let thinkNeedsRender = false;
+        const RENDER_INTERVAL = 150; 
+
+        const scheduleRender = () => {
+            if (renderScheduled) return;
+            renderScheduled = true;
+            setTimeout(() => {
+                if (assistantNeedsRender) {
+                    renderBubbleContent(outEl, 'assistant', assistantBuffer);
+                    assistantNeedsRender = false;
+                }
+                if (thinkNeedsRender && thinkEl) {
+                    renderBubbleContent(thinkEl, 'system', thinkBuffer);
+                    thinkNeedsRender = false;
+                }
+                maybeScroll();
+                renderScheduled = false;
+            }, RENDER_INTERVAL);
+        };
+        // --- OPTIMIERUNG ENDE ---
+
+        const reader = res.body.getReader(); const decoder = new TextDecoder('utf-8'); let buffer=''; let done=false;
+        while (!done) {
+          const { value, done: rdDone } = await reader.read(); done = rdDone;
+
+          if (streamStartTime === 0 && value) {
+            streamStartTime = performance.now();
+          }
+
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+          let events = buffer.split('\n\n'); buffer = events.pop() || '';
+          for (const ev of events) {
+            const lines = ev.split('\n').filter(Boolean);
+            for (const line of lines) {
+              if (!line.startsWith('data:')) continue;
+              const dataStr = line.slice(5).trim(); if (dataStr === '[DONE]') { done = true; break; }
+              try {
+                const obj = JSON.parse(dataStr);
+                
+                if (obj?.usage?.completion_tokens) {
+                    finalCompletionTokens = obj.usage.completion_tokens;
+                }
+                
+                const delta = obj?.choices?.[0]?.delta;
+                if (!delta) continue;
+
+                let hasUpdated = false;
+                
+                const reasoningChunk = delta.reasoning || delta.reasoning_content || '';
+                
+                if (reasoningChunk) {
+                    if (!thinkEl) thinkEl = addThinkBubble(outEl);
+                    thinkBuffer += reasoningChunk;
+                    thinkNeedsRender = true; 
+                    hasUpdated = true;
+                }
+                
+                const contentChunk = delta.content || '';
+                if (contentChunk) {
+                    let tempChunk = contentChunk;
+                    while (tempChunk.length > 0) {
+                        if (inThinkBlock) {
+                            const endPos = tempChunk.indexOf('</think>');
+                            if (endPos !== -1) {
+                                thinkBuffer += tempChunk.substring(0, endPos);
+                                tempChunk = tempChunk.substring(endPos + 8);
+                                inThinkBlock = false;
+                                thinkNeedsRender = true; 
+                            } else {
+                                thinkBuffer += tempChunk;
+                                tempChunk = '';
+                                thinkNeedsRender = true; 
+                            }
+                        } else {
+                            const startPos = tempChunk.indexOf('<think>');
+                            if (startPos !== -1) {
+                                assistantBuffer += tempChunk.substring(0, startPos);
+                                assistantNeedsRender = true; 
+                                if (!thinkEl) thinkEl = addThinkBubble(outEl);
+                                const restOfChunk = tempChunk.substring(startPos + 7);
+                                const endPosInRest = restOfChunk.indexOf('</think>');
+                                if (endPosInRest !== -1) {
+                                    thinkBuffer += restOfChunk.substring(0, endPosInRest);
+                                    tempChunk = restOfChunk.substring(endPosInRest + 8);
+                                    thinkNeedsRender = true; 
+                                } else {
+                                    thinkBuffer += restOfChunk;
+                                    tempChunk = '';
+                                    inThinkBlock = true;
+                                    thinkNeedsRender = true; 
+                                }
+                            } else {
+                                assistantBuffer += tempChunk;
+                                assistantNeedsRender = true; 
+                                tempChunk = '';
+                            }
+                        }
+                    }
+                    hasUpdated = true;
+                }
+                
+                if (hasUpdated) {
+                  scheduleRender();
+                  if (streamStartTime > 0) updateTokenRate(assistantBuffer + thinkBuffer);
+                }
+              } catch {}
+            }
+          }
+        }
+        // Finales Rendering am Ende des Streams, um sicherzustellen, dass alles angezeigt wird
+        renderBubbleContent(outEl, 'assistant', assistantBuffer);
+        if (thinkEl) renderBubbleContent(thinkEl, 'system', thinkBuffer);
+        
+        if (streamStartTime > 0) updateTokenRate(assistantBuffer + thinkBuffer, true);
+        
+        maybeScroll();
+      }
+      
+      assistantBuffer = assistantBuffer.trim();
+      if (assistantBuffer) {
+        messages.push({ role: 'assistant', content: assistantBuffer });
+      }
+      if (els.rawBox.open) editorDumpFromChat();
+    } catch (err) {
+      addMessage('system', `[Error] ${err.message}`); console.error(err);
+    } finally {
+      setStreamingState(false); abortController = null;
+    }
+  }
+
+  function stopStream(){ if (abortController) abortController.abort(); }
+  function clearChat(){ messages = []; els.log.innerHTML = ''; els.tokenRate.textContent = ''; if (els.rawBox.open) editorDumpFromChat(); maybeScroll(true); }
+
+  /* ---------- Import / Export ---------- */
+  function exportChat(){
+    const out = buildExportArray();
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); const ts = new Date(); const pad = n=>String(n).padStart(2,'0');
+    a.href = url; a.download = `chat_${ts.getFullYear()}-${pad(ts.getMonth()+1)}-${pad(ts.getDate())}_${pad(ts.getHours())}-${pad(ts.getMinutes())}-${pad(ts.getSeconds())}.json`;
+    a.click(); setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }
+
+  async function parseImport(text){
+    const cleaned = text.replace(/\r/g,'');
+    let raw; try { raw = JSON.parse(cleaned); }
+    catch { const lines = cleaned.split('\n').map(s=>s.trim()).filter(Boolean); const arr=[]; for (const line of lines){ try{ arr.push(JSON.parse(line)); }catch{} } raw = arr.length ? arr : null; }
+    if (!raw) throw new Error('File not readable (neither JSON nor JSONL).');
+
+    let arr = [], topSystem = '';
+    if (Array.isArray(raw)) arr = raw;
+    else if (Array.isArray(raw.messages)) { arr = raw.messages; topSystem = String(raw.system || '').trim(); }
+    else if (Array.isArray(raw.conversation)) { arr = raw.conversation; topSystem = String(raw.system || '').trim(); }
+    else throw new Error('No message array found (expected: [ {role, content}, ... ]).');
+
+    const normalized = arr.map(m => ({ role: normalizeRole(m.role), content: normalizeContent(m.content) }))
+                          .filter(m => ['system','user','assistant'].includes(m.role) && typeof m.content === 'string');
+
+    const hasSystem = normalized.some(m => m.role === 'system');
+    if (!hasSystem && topSystem) normalized.unshift({ role:'system', content: topSystem });
+    if (!normalized.length) throw new Error('No valid messages found in import.');
+    return normalized;
+  }
+
+  function handleFile(file){
+    const reader = new FileReader();
+    reader.onload = () => {
+      parseImport(String(reader.result || ''))
+        .then(arr => { messages = arr; const sys = messages.find(m=>m.role==='system'); els.system.value = sys?sys.content:''; renderAll(); addMessage('system', `Chat imported (${messages.length} messages).`); if (els.rawBox.open) editorDumpFromChat(); })
+        .catch(e => addMessage('system', `[Import error] ${e.message}`));
+    };
+    reader.onerror = () => addMessage('system', `[Import error] Could not read file.`);
+    reader.readAsText(file);
+  }
+  if (els.drop) {
+    ['dragenter','dragover'].forEach(ev => els.drop.addEventListener(ev, e => { e.preventDefault(); els.drop.classList.add('drag'); }));
+    ['dragleave','drop'].forEach(ev => els.drop.addEventListener(ev, e => { e.preventDefault(); els.drop.classList.remove('drag'); }));
+    els.drop.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f) handleFile(f); });
+  }
+
+  /* ---------- RAW JSON Editor ---------- */
+  function editorSetStatus(msg, ok=true){ els.jsonStatus.textContent = msg || ''; els.jsonEditor.style.borderColor = ok ? 'var(--line)' : '#b40000'; }
+  function editorDumpFromChat(){ els.jsonEditor.value = JSON.stringify(buildExportArray(), null, 2); editorSetStatus('loaded from chat'); }
+  async function editorParseCurrent(){
+    const text = els.jsonEditor.value.trim() || '[]';
+    const arr = await parseImport(text);
+    const firstSys = arr.find(m=>m.role==='system'); if (firstSys) els.system.value = firstSys.content;
+    return arr;
+  }
+  async function editorReplace(){
+    try{
+      const arr = await editorParseCurrent();
+      isRendering = true;
+      messages = arr;
+      renderAll();
+      isRendering = false;
+      autoscroll = true;
+      editorSetStatus(`applied (replace) — ${messages.length} messages`);
+      addMessage('system', `Chat set from JSON (${messages.length})`);
+    } catch(e){ editorSetStatus(e.message,false); addMessage('system', `[JSON error] ${e.message}`); }
+  }
+  async function editorAppend(){
+    try{
+      const arr = await editorParseCurrent();
+      isRendering = true;
+      messages = messages.concat(arr);
+      renderAll();
+      isRendering = false;
+      autoscroll = true;
+      editorSetStatus(`applied (append) — now ${messages.length} messages`);
+      addMessage('system', `Chat appended from JSON (+${arr.length})`);
+    } catch(e){ editorSetStatus(e.message,false); addMessage('system', `[JSON error] ${e.message}`); }
+  }
+  function editorBeautify(){ try { const obj = JSON.parse(els.jsonEditor.value || '[]'); els.jsonEditor.value = JSON.stringify(obj, null, 2); editorSetStatus('beautified'); } catch(e){ editorSetStatus('invalid JSON', false);} }
+  function editorMinify(){ try { const obj = JSON.parse(els.jsonEditor.value || '[]'); els.jsonEditor.value = JSON.stringify(obj); editorSetStatus('minified'); } catch(e){ editorSetStatus('invalid JSON', false);} }
+  async function editorValidate(){ try { await editorParseCurrent(); editorSetStatus('valid ✓'); } catch(e){ editorSetStatus(e.message, false); } }
+
+  els.rawBox.addEventListener('toggle', () => { if (els.rawBox.open) editorDumpFromChat(); });
+  els.jsonRefresh.addEventListener('click', editorDumpFromChat);
+  els.jsonApply.addEventListener('click', editorReplace);
+  els.jsonAppend.addEventListener('click', editorAppend);
+  els.jsonPretty.addEventListener('click', editorBeautify);
+  els.jsonMinify.addEventListener('click', editorMinify);
+  els.jsonValidate.addEventListener('click', editorValidate);
+
+  /* ---------- Wire UI ---------- */
+  els.sendBtn.addEventListener('click', sendMessage);
+  els.stopBtn.addEventListener('click', stopStream);
+  els.clearBtn.addEventListener('click', clearChat);
+  els.importBtn.addEventListener('click', () => els.importFile.click());
+  els.importFile.addEventListener('change', () => { const f = els.importFile.files?.[0]; if (f) handleFile(f); els.importFile.value = ''; });
+  els.exportBtn.addEventListener('click', exportChat);
+  if (els.loadModelsBtn) els.loadModelsBtn.addEventListener('click', loadModels);
+  els.input.addEventListener('keydown', (e) => { if ((e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); sendMessage(); } });
+  els.temp.addEventListener('input', () => { els.tempVal.textContent = parseFloat(els.temp.value).toFixed(1); });
+  els.settingsToggle.addEventListener('click', () => {
+    els.settingsPanel.classList.toggle('hidden');
+  });
+
+  /* ---------- Info dialog ---------- */
+  if (els.infoVersion) els.infoVersion.textContent = APP_VERSION;
+  if (els.infoProjectUrl) {
+    els.infoProjectUrl.textContent = PROJECT_URL;
+    els.infoProjectUrl.href = PROJECT_URL;
+  }
+  if (els.infoBtn && els.infoDialog) {
+    els.infoBtn.addEventListener('click', () => {
+      if (typeof els.infoDialog.showModal === 'function') els.infoDialog.showModal();
+      else els.infoDialog.setAttribute('open', '');
+    });
+    // Click outside the card closes the dialog
+    els.infoDialog.addEventListener('click', (e) => {
+      const r = els.infoDialog.getBoundingClientRect();
+      // If click lands on the backdrop (not on the card), close.
+      if (e.target === els.infoDialog) els.infoDialog.close();
+    });
+  }
+
+  /* ---------- Welcome ---------- */
+  addMessage('system', 'Ready. CORS mode enabled. <think>, reasoning and reasoning_content supported. Import/Export + Markdown + JSON editor + auto-scroll enabled. Load models via /v1/models.');
+})();
+</script>
+</body>
+</html>
