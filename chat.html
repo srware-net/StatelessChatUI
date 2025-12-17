@@ -232,6 +232,24 @@
       header button, footer button{padding:.5rem .75rem}
     }
 
+  
+    /* Attachments */
+    .chip{
+      display:inline-flex; align-items:center; gap:.45rem;
+      padding:.35rem .55rem; border:1px solid var(--line);
+      background:#0c0f15; border-radius:999px; color:var(--ink);
+      max-width:100%;
+    }
+    .chip small{color:var(--muted)}
+    .chip button{
+      padding:.15rem .35rem; border-radius:8px;
+      background:#101827; border:1px solid var(--line);
+    }
+    .chip button:hover{border-color:var(--acc)}
+
+    /* Markdown images */
+    .md img{max-width:100%; height:auto; border-radius:10px; border:1px solid var(--line)}
+
   </style>
 </head>
 <body>
@@ -295,11 +313,16 @@
     <div class="bar">
       <textarea id="input" placeholder="Type a message… (Send: Ctrl/⌘+Enter)"></textarea>
       <div class="row" style="display:flex; gap:.6rem; align-items:center">
+        <button id="attachBtn" class="secondary" title="Attach files">📎</button>
+        <input id="attachInput" type="file" class="hidden" multiple />
         <button id="send">Send</button>
         <button id="stop" class="secondary" disabled>Stop</button>
         <button id="clear" class="secondary">Clear chat</button>
         <button id="settingsToggle" class="secondary" title="Toggle settings">⚙️</button>
       </div>
+    </div>
+    <div id="attachmentsBar" class="bar hidden" style="margin-top:.6rem; grid-template-columns:1fr; gap:.6rem">
+      <div id="attachmentsList" style="max-width:900px; margin:0 auto; display:flex; gap:.5rem; flex-wrap:wrap"></div>
     </div>
     <div id="settingsPanel" class="bar hidden" style="margin-top:.6rem; grid-template-columns:1fr auto; gap:.6rem">
       <div style="max-width:900px; margin:0 auto; display:grid; grid-template-columns:1fr auto; gap:.6rem; grid-column:1/-1; width:100%">
@@ -356,6 +379,10 @@
     sendBtn: document.getElementById('send'),
     stopBtn: document.getElementById('stop'),
     clearBtn: document.getElementById('clear'),
+    attachBtn: document.getElementById('attachBtn'),
+    attachInput: document.getElementById('attachInput'),
+    attachmentsBar: document.getElementById('attachmentsBar'),
+    attachmentsList: document.getElementById('attachmentsList'),
     apiBase: document.getElementById('apiBase'),
     model: document.getElementById('model'),
     apiKey: document.getElementById('apiKey'),
@@ -391,11 +418,127 @@
   };
 
   let messages = [];
+  let attachments = []; // {id,name,type,size, kind:'text'|'image'|'other', text?, dataUrl?, truncated?}
+  let nextAttachId = 1;
+
+  function fmtBytes(n){
+    if (!Number.isFinite(n)) return '';
+    const u = ['B','KB','MB','GB']; let i=0; let x=n;
+    while (x>=1024 && i<u.length-1){ x/=1024; i++; }
+    return `${x.toFixed(i?1:0)} ${u[i]}`;
+  }
+
+  function renderAttachments(){
+    const list = els.attachmentsList;
+    list.innerHTML = '';
+    if (!attachments.length){
+      els.attachmentsBar.classList.add('hidden');
+      return;
+    }
+    els.attachmentsBar.classList.remove('hidden');
+
+    for (const a of attachments){
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+
+      const icon = document.createElement('span');
+      icon.textContent = (a.kind === 'image') ? '🖼️' : (a.kind === 'text') ? '📄' : '📦';
+
+      const name = document.createElement('span');
+      name.style.overflow = 'hidden';
+      name.style.textOverflow = 'ellipsis';
+      name.style.whiteSpace = 'nowrap';
+      name.style.maxWidth = '55ch';
+      name.textContent = a.name;
+
+      const size = document.createElement('small');
+      size.textContent = fmtBytes(a.size);
+
+      const remove = document.createElement('button');
+      remove.title = 'Remove';
+      remove.textContent = '✕';
+      remove.addEventListener('click', ()=>{
+        attachments = attachments.filter(x => x.id !== a.id);
+        renderAttachments();
+      });
+
+      chip.append(icon, name, size, remove);
+      list.appendChild(chip);
+    }
+  }
+
+  const MAX_TEXT_CHARS_PER_FILE = 20000;
+  const MAX_TOTAL_ATTACHMENTS = 12;
+
+  function readFileAsText(file){
+    return new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = ()=> resolve(String(r.result||''));
+      r.onerror = ()=> reject(new Error('read failed'));
+      r.readAsText(file);
+    });
+  }
+  function readFileAsDataURL(file){
+    return new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = ()=> resolve(String(r.result||''));
+      r.onerror = ()=> reject(new Error('read failed'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function addAttachmentsFromFileList(fileList){
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+
+    for (const file of files.slice(0, Math.max(0, MAX_TOTAL_ATTACHMENTS - attachments.length))){
+      const id = nextAttachId++;
+      const type = file.type || '';
+      const name = file.name || `file_${id}`;
+      const size = file.size || 0;
+
+      if (type.startsWith('image/')){
+        try{
+          const dataUrl = await readFileAsDataURL(file);
+          attachments.push({ id, name, type, size, kind:'image', dataUrl });
+        } catch {
+          addMessage('system', `[Attach] Could not read image: ${name}`);
+        }
+        continue;
+      }
+
+      const looksText = type.startsWith('text/')
+        || /\.(txt|md|json|jsonl|csv|tsv|log|yaml|yml|py|js|ts|html|css|xml|ini|toml)$/i.test(name);
+
+      if (looksText){
+        try{
+          let text = await readFileAsText(file);
+          let truncated = false;
+          if (text.length > MAX_TEXT_CHARS_PER_FILE){
+            text = text.slice(0, MAX_TEXT_CHARS_PER_FILE);
+            truncated = true;
+          }
+          attachments.push({ id, name, type, size, kind:'text', text, truncated });
+        } catch {
+          addMessage('system', `[Attach] Could not read text file: ${name}`);
+        }
+        continue;
+      }
+
+      attachments.push({ id, name, type, size, kind:'other' });
+    }
+
+    if (attachments.length >= MAX_TOTAL_ATTACHMENTS) {
+      addMessage('system', `[Attach] Limit reached (${MAX_TOTAL_ATTACHMENTS} files).`);
+    }
+    renderAttachments();
+  }
+
   let abortController = null;
   const NL = '\n';
 
-  const APP_VERSION = '2025-12-13';
-  const PROJECT_URL = 'https://example.com/statelesschatui';
+  const APP_VERSION = '1.0';
+  const PROJECT_URL = 'https://www.locallightai.com/scu';
   
   let streamStartTime = 0;
   let lastUpdateTime = 0;
@@ -434,6 +577,7 @@
   /* ---------- Markdown ---------- */
   const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   function inlineMd(s){
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_,alt,url)=>'<img src="'+url+'" alt="'+alt.replace(/"/g,'&quot;')+'">');
     s = s.replace(/`([^`]+)`/g, (_,p)=>'<code>'+p+'</code>');
     s = s.replace(/\*\*([^*]+)\*\*/g, (_,p)=>'<strong>'+p+'</strong>');
     s = s.replace(/\*([^*]+)\*/g,   (_,p)=>'<em>'+p+'</em>');
@@ -442,7 +586,8 @@
     return s;
   }
   function mdToHtml(md){
-    md = (md||'').replace(/\r/g,'');
+    md = String(md ?? '');
+    md = md.replace(/\r/g,'');
     const lines = md.split('\n');
     let html = '', inCode = false, codeLang = '', listType = null;
     const closeList = () => { if (listType) { html += `</${listType}>`; listType=null; } };
@@ -544,7 +689,7 @@
 
   /* ---------- UI helpers ---------- */
   function renderBubbleContent(el, role, content){
-    el.classList.add('md'); el.innerHTML = mdToHtml(content || ''); enhanceCodeCopy(el);
+    el.classList.add('md'); el.innerHTML = mdToHtml(normalizeContent(content)); enhanceCodeCopy(el);
   }
   
   function addMessage(role, content) {
@@ -597,7 +742,22 @@
   }
 
   /* ---------- Normalizer ---------- */
-  function normalizeContent(c){ if (typeof c === 'string') return c; if (Array.isArray(c)) return c.map(p => typeof p==='string'? p : (p?.text ?? '')).join(''); if (c && typeof c==='object' && 'text' in c) return String(c.text ?? ''); try { return JSON.stringify(c); } catch { return String(c); } }
+  function normalizeContent(c){
+    if (typeof c === 'string') return c;
+    if (Array.isArray(c)) {
+      return c.map(p => {
+        if (typeof p === 'string') return p;
+        if (p?.type === 'text') return p.text ?? '';
+        if (p?.type === 'image_url') {
+          const u = p?.image_url?.url || '';
+          return u ? `![image](${u})` : '';
+        }
+        return p?.text ?? '';
+      }).join(String.fromCharCode(10));
+    }
+    if (c && typeof c === 'object' && 'text' in c) return String(c.text ?? '');
+    try { return JSON.stringify(c); } catch { return String(c); }
+  }
   function normalizeRole(r){ const s=String(r||'').toLowerCase(); if (s.startsWith('assist')) return 'assistant'; if (s.startsWith('sys')) return 'system'; return 'user'; }
 
   /* ---------- Export inkl. system ---------- */
@@ -696,7 +856,7 @@
   async function sendMessage() {
     try {
       const text = els.input.value.trim();
-      if (!text && !els.system.value.trim()) return;
+      if (!text && !els.system.value.trim() && attachments.length === 0) return;
 
       if (!els.model.value) {
         addMessage('system', '[Hint] No model selected — click “Load models”, then choose one.');
@@ -712,11 +872,38 @@
         messages.push({ role: 'system', content: sys });
         addMessage('system', sys);
       }
-      if (text) {
-        messages.push({ role: 'user', content: text });
-        addMessage('user', text);
+      const hasAtt = attachments.length > 0;
+      if (text || hasAtt) {
+        const parts = [];
+        if (text) parts.push({ type:'text', text });
+        else parts.push({ type:'text', text: 'Attached files:' });
+
+        const textFiles = attachments.filter(a => a.kind === 'text');
+        if (textFiles.length){
+          let blob = '\n\n---\nAttached files (verbatim):\n';
+          for (const a of textFiles){
+            blob += `\n[File: ${a.name}${a.truncated?' (TRUNCATED)':''}]\n\`\`\`\n${a.text}\n\`\`\`\n`;
+          }
+          parts.push({ type:'text', text: blob });
+        }
+
+        const imgs = attachments.filter(a => a.kind === 'image');
+        for (const a of imgs){
+          if (a.dataUrl){
+            parts.push({ type:'image_url', image_url:{ url: a.dataUrl }});
+          }
+        }
+
+        const content = (parts.length === 1) ? (parts[0].text ?? '') : parts;
+
+        messages.push({ role: 'user', content });
+        addMessage('user', content);
         els.input.value = '';
+
+        attachments = [];
+        renderAttachments();
       }
+
 
       const outEl = addMessage('assistant', '');
 
@@ -1035,6 +1222,13 @@
   els.sendBtn.addEventListener('click', sendMessage);
   els.stopBtn.addEventListener('click', stopStream);
   els.clearBtn.addEventListener('click', clearChat);
+  if (els.attachBtn && els.attachInput) {
+    els.attachBtn.addEventListener('click', ()=> els.attachInput.click());
+    els.attachInput.addEventListener('change', ()=>{
+      addAttachmentsFromFileList(els.attachInput.files);
+      els.attachInput.value = '';
+    });
+  }
   els.importBtn.addEventListener('click', () => els.importFile.click());
   els.importFile.addEventListener('change', () => { const f = els.importFile.files?.[0]; if (f) handleFile(f); els.importFile.value = ''; });
   els.exportBtn.addEventListener('click', exportChat);
