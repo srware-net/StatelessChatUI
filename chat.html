@@ -360,6 +360,7 @@
       <div><span class="muted">Version:</span> <code id="infoVersion">0.0.0</code></div>
       <div><span class="muted">Project URL:</span> <a id="infoProjectUrl" href="https://example.com/statelesschatui" target="_blank" rel="noopener">https://example.com/statelesschatui</a></div>
       <div><span class="muted">AI Blog:</span> <a href="https://www.promptinjection.net/" target="_blank" rel="noopener">PromptInjection.net</a></div>
+      <div><span class="muted">Imprint:</span> <a id="infoImprint" href="http://www.locallightai.com/imprint" target="_blank" rel="noopener">http://www.locallightai.com/imprint</a></div>
       <div class="muted" style="margin-top:.6rem; font-size:12px">Stateless UI — no server-side chat storage.</div>
     </div>
     <div class="info-actions">
@@ -411,6 +412,7 @@
     infoDialog: document.getElementById('infoDialog'),
     infoVersion: document.getElementById('infoVersion'),
     infoProjectUrl: document.getElementById('infoProjectUrl'),
+    infoImprint: document.getElementById('infoImprint'),
     // NEU:
     top_p: document.getElementById('top_p'),
     min_p: document.getElementById('min_p'),
@@ -537,8 +539,9 @@
   let abortController = null;
   const NL = '\n';
 
-  const APP_VERSION = '1.0';
+  const APP_VERSION = '1.01';
   const PROJECT_URL = 'https://www.locallightai.com/scu';
+  const IMPRINT_URL = 'https://www.srware.net/imprint';
   
   let streamStartTime = 0;
   let lastUpdateTime = 0;
@@ -794,8 +797,34 @@
     els.tokenRate.textContent = label;
   }
 
+
+  /* ---------- API Base validation (Mixed content guard) ---------- */
+  function isMixedContentApiBase(){
+    const pageProto = window.location.protocol;
+    const base = (els.apiBase?.value || '').trim();
+    return pageProto === 'https:' && /^http:\/\//i.test(base);
+  }
+  function ensureApiBaseAllowed(){
+    if (isMixedContentApiBase()){
+      addMessage('system',
+        `[Config] Mixed content blocked: this UI is loaded via HTTPS, but API Base is HTTP.\n` +
+        `Browsers will usually block this request. Use an https:// API Base, or open the UI via http:// or file://.`
+      );
+      try{ els.apiBase.style.borderColor = '#b40000'; }catch{}
+      return false;
+    }
+    try{ els.apiBase.style.borderColor = ''; }catch{}
+    return true;
+  }
+  // Clear the red border as soon as the user edits the field
+  if (els.apiBase) {
+    els.apiBase.addEventListener('input', () => { try{ els.apiBase.style.borderColor = ''; }catch{} });
+  }
+
+
   /* ---------- Models (GET /v1/models) ---------- */
   async function loadModels() {
+    if (!ensureApiBaseAllowed()) return;
     const base = (els.apiBase.value || '').trim().replace(/\/$/, '');
     const url = `${base}/models`;
 
@@ -857,6 +886,8 @@
     try {
       const text = els.input.value.trim();
       if (!text && !els.system.value.trim() && attachments.length === 0) return;
+
+      if (!ensureApiBaseAllowed()) return;
 
       if (!els.model.value) {
         addMessage('system', '[Hint] No model selected — click “Load models”, then choose one.');
@@ -1244,6 +1275,10 @@
   if (els.infoProjectUrl) {
     els.infoProjectUrl.textContent = PROJECT_URL;
     els.infoProjectUrl.href = PROJECT_URL;
+  }
+  if (els.infoImprint) {
+    els.infoImprint.textContent = IMPRINT_URL;
+    els.infoImprint.href = IMPRINT_URL;
   }
   if (els.infoBtn && els.infoDialog) {
     els.infoBtn.addEventListener('click', () => {
