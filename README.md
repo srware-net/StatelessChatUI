@@ -15,6 +15,7 @@ The architecture eliminates server dependencies entirely – the HTML document f
 - Native interpretation of `<thinking>` tags and `reasoning`/`reasoning_content` content blocks
 - Complete message history control via integrated JSON editor
 - CORS-compatible direct connection to OpenAI-compatible APIs
+- File/Vision support for multimodal LLM
 - Import/export mechanisms for conversation persistence (JSON/JSONL)
 
 **UI/UX Design**
